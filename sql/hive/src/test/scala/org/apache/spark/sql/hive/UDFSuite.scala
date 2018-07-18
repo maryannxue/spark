@@ -20,6 +20,7 @@ package org.apache.spark.sql.hive
 import org.scalatest.BeforeAndAfterEach
 
 import org.apache.spark.sql.{AnalysisException, DataFrame, QueryTest, Row}
+import org.apache.spark.sql.functions.{lit, udf}
 import org.apache.spark.sql.hive.test.TestHiveSingleton
 import org.apache.spark.sql.test.SQLTestUtils
 
@@ -194,5 +195,28 @@ class UDFSuite
         sql(s"USE default")
       }
     }
+  }
+
+  test("HandleNullInputsForUDF rule is idempotent") {
+    val udf1 = udf({(x: Int, y: Int) => x + y})
+    val df = spark.range(0, 10).toDF("a")
+      .withColumn("b", udf1($"a", $"a"))
+      .withColumn("c", udf1($"a", lit(null)))
+    val plan = spark.sessionState.executePlan(df.logicalPlan).analyzed
+
+    comparePlans(df.logicalPlan, plan)
+    checkAnswer(
+      df,
+      Seq(
+        Row(0, 0, null),
+        Row(1, 2, null),
+        Row(2, 4, null),
+        Row(3, 6, null),
+        Row(4, 8, null),
+        Row(5, 10, null),
+        Row(6, 12, null),
+        Row(7, 14, null),
+        Row(8, 16, null),
+        Row(9, 18, null)))
   }
 }
