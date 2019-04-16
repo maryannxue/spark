@@ -34,6 +34,7 @@ import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.codegen.{Predicate => GenPredicate, _}
 import org.apache.spark.sql.catalyst.plans.QueryPlan
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.plans.physical._
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.types.DataType
@@ -71,6 +72,24 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ
       SparkSession.setActiveSession(sqlContext.sparkSession)
     }
     super.makeCopy(newArgs)
+  }
+
+  /**
+   * @return The logical plan this plan is linked to.
+   */
+  def logicalLink: Option[LogicalPlan] =
+    tags.get(QueryPlan.TREE_NODE_TAG_LOGICAL_PLAN).asInstanceOf[Option[LogicalPlan]]
+
+  /**
+   * Set logical plan link recursively if unset.
+   */
+  def setLogicalLink(logicalPlan: LogicalPlan): Unit = {
+    if (tags.get(QueryPlan.TREE_NODE_TAG_LOGICAL_PLAN).isDefined) {
+      return
+    }
+
+    tags += QueryPlan.TREE_NODE_TAG_LOGICAL_PLAN -> logicalPlan
+    for (child <- children) {child.setLogicalLink(logicalPlan)}
   }
 
   /**

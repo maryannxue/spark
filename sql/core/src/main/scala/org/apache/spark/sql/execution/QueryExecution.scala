@@ -30,6 +30,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, ReturnAnswer}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.util.StringUtils.{PlanStringConcat, StringConcat}
 import org.apache.spark.sql.catalyst.util.truncatedString
+import org.apache.spark.sql.execution.adaptive.InsertAdaptiveSparkPlan
 import org.apache.spark.sql.execution.exchange.{EnsureRequirements, ReuseExchange}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.util.Utils
@@ -109,9 +110,12 @@ class QueryExecution(
   protected def preparations: Seq[Rule[SparkPlan]] = Seq(
     PlanSubqueries(sparkSession),
     EnsureRequirements(sparkSession.sessionState.conf),
+    ReuseSubquery(sparkSession.sessionState.conf),
+    // `AdaptiveSparkPlan` is a leaf node. If inserted, all the following rules will be no-op as
+    // the original plan is hidden behind `AdaptiveSparkPlan`.
+    InsertAdaptiveSparkPlan(sparkSession),
     CollapseCodegenStages(sparkSession.sessionState.conf),
-    ReuseExchange(sparkSession.sessionState.conf),
-    ReuseSubquery(sparkSession.sessionState.conf))
+    ReuseExchange(sparkSession.sessionState.conf))
 
   def simpleString: String = withRedaction {
     val concat = new PlanStringConcat()
