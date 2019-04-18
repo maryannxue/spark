@@ -48,9 +48,9 @@ case class LogicalQueryStage(
       case s: QueryStageExec => s
     }.flatMap(_.stats)
     if (physicalStats.isDefined) {
-      logWarning(s"Physical stats available as ${physicalStats.get} for plan: $physicalPlan")
+      logDebug(s"Physical stats available as ${physicalStats.get} for plan: $physicalPlan")
     } else {
-      logWarning(s"Physical stats not available for plan: $physicalPlan")
+      logDebug(s"Physical stats not available for plan: $physicalPlan")
     }
     physicalStats.getOrElse(logicalPlan.stats)
   }

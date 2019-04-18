@@ -34,7 +34,7 @@ case class InsertAdaptiveSparkPlan(session: SparkSession) extends Rule[SparkPlan
   override def apply(plan: SparkPlan): SparkPlan = plan match {
     case _: ExecutedCommandExec => plan
     case _ if session.sessionState.conf.adaptiveExecutionEnabled && supportAdaptive(plan) =>
-      logWarning(s"Adaptive execution enabled for plan: $plan")
+      logDebug(s"Adaptive execution enabled for plan: $plan")
       AdaptiveSparkPlanExec(plan, session.cloneSession())
     case _ => plan
   }

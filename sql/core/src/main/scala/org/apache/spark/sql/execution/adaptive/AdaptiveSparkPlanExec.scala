@@ -102,6 +102,8 @@ case class AdaptiveSparkPlanExec(initialPlan: SparkPlan, session: SparkSession)
   override def executeCollect(): Array[InternalRow] = finalPlan.executeCollect()
   override def executeTake(n: Int): Array[InternalRow] = finalPlan.executeTake(n)
   override def executeToIterator(): Iterator[InternalRow] = finalPlan.executeToIterator()
+
+  override def doPrepare(): Unit = currentPlan.prepare()
   override def doExecute(): RDD[InternalRow] = finalPlan.execute()
   override def generateTreeString(
     depth: Int,

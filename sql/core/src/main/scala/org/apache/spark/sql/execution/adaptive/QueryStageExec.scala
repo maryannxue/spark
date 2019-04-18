@@ -63,12 +63,22 @@ abstract class QueryStageExec extends LeafExecNode {
    * broadcasting data, etc. The caller side can use the returned [[Future]] to wait until this
    * stage is ready.
    */
-  def materialize(): Future[Any]
+  def doMaterialize(): Future[Any]
 
   /**
    * The statistics of the query stage if executed, otherwise None.
    */
   def stats: Option[Statistics]
+
+  /**
+   * Materialize this query stage, to prepare for the execution, like submitting map stages,
+   * broadcasting data, etc. The caller side can use the returned [[Future]] to wait until this
+   * stage is ready.
+   */
+  def materialize(): Future[Any] = {
+    plan.prepare()
+    doMaterialize()
+  }
 
   @transient
   @volatile
@@ -81,7 +91,6 @@ abstract class QueryStageExec extends LeafExecNode {
   override def executeTake(n: Int): Array[InternalRow] = plan.executeTake(n)
   override def executeToIterator(): Iterator[InternalRow] = plan.executeToIterator()
 
-  override def doPrepare(): Unit = plan.prepare()
   override def doExecute(): RDD[InternalRow] = plan.execute()
   override def doExecuteBroadcast[T](): Broadcast[T] = plan.executeBroadcast()
   override def doCanonicalize(): SparkPlan = plan.canonicalized
@@ -125,16 +134,14 @@ case class ShuffleQueryStageExec(id: Int, plan: ShuffleExchangeExec) extends Que
     }
   }
 
-  override def materialize(): Future[Any] = {
+  override def doMaterialize(): Future[Any] = {
     mapOutputStatisticsFuture
   }
 
   override def stats: Option[Statistics] = {
     resultOption.map { res =>
       val mapOutputStatistics = res.asInstanceOf[MapOutputStatistics]
-      val logicalStats = logicalLink.get.stats
-      logicalStats.copy(
-        sizeInBytes = mapOutputStatistics.bytesByPartitionId.map(BigInt.apply).sum)
+      Statistics(sizeInBytes = mapOutputStatistics.bytesByPartitionId.map(BigInt.apply).sum)
     }
   }
 }
@@ -148,12 +155,23 @@ case class BroadcastQueryStageExec(id: Int, plan: BroadcastExchangeExec) extends
     copy(plan = newPlan.asInstanceOf[BroadcastExchangeExec])
   }
 
-  override def materialize(): Future[Any] = {
+  override def doMaterialize(): Future[Any] = {
     plan.relationFuture
   }
 
-  // TODO
-  override def stats: Option[Statistics] = None
+  override def stats: Option[Statistics] = {
+    val sizeOption = resultOption match {
+      case Some(_) =>
+        Some(plan.metrics("dataSize").value).map(BigInt.apply)
+      case _ if plan.child.isInstanceOf[QueryStageExec] =>
+        plan.child.asInstanceOf[QueryStageExec].stats.map(_.sizeInBytes)
+      case _ => None
+    }
+    val limit = conf.autoBroadcastJoinThreshold
+    // This is a hack to prevent a broadcast join turning back into other joins again
+    val size = sizeOption.filter( _ <= limit).getOrElse(BigInt.apply(limit))
+    Some(Statistics(sizeInBytes = size))
+  }
 }
 
 /**

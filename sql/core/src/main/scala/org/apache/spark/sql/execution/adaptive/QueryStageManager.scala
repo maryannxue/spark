@@ -90,11 +90,9 @@ class QueryStageManager(
     CollapseCodegenStages(conf))
 
   private def optimizeEntirePlan(plan: LogicalPlan): SparkPlan = {
-    logWarning(s"Re-optimizing plan: $plan")
     val optimized = Optimizer.execute(plan)
     SparkSession.setActiveSession(session)
     val sparkPlan = session.sessionState.planner.plan(ReturnAnswer(optimized)).next()
-    logWarning(s"Plan changed to: $sparkPlan")
     preparations.foldLeft(sparkPlan) { case (sp, rule) => rule.apply(sp) }
   }
 
@@ -125,7 +123,12 @@ class QueryStageManager(
     // TODO we should only process the latest StageReady event to avoid waste of re-planning.
     case StageReady(stage) =>
       readyStages += stage.id
-      currentPlan = optimizeEntirePlan(currentLogicalPlan)
+      val newPlan = optimizeEntirePlan(currentLogicalPlan)
+      if (newPlan != currentPlan) {
+        logDebug(s"Logical Plan changed to: $currentLogicalPlan")
+        logDebug(s"Physical Plan changed to: $newPlan")
+      }
+      currentPlan = newPlan
       createQueryStages(currentPlan)
   }
 
@@ -140,7 +143,7 @@ class QueryStageManager(
     val result = createQueryStages0(plan)
     if (result.allChildStagesReady) {
       val finalPlan = optimizeQueryStage(result.newPlan)
-      logWarning(s"Final plan: $finalPlan")
+      logDebug(s"Final plan: $finalPlan")
       callback.onFinalPlan(finalPlan)
       finalPlan
     } else {
@@ -225,9 +228,14 @@ class QueryStageManager(
       }
       assert(physicalNode.isDefined)
       // Replace the corresponding logical node with LogicalQueryStage
-      currentLogicalPlan = currentLogicalPlan.transformDown {
-        case p if p eq logicalNode => LogicalQueryStage(logicalNode, physicalNode.get)
+      val newLogicalNode = LogicalQueryStage(logicalNode, physicalNode.get)
+      val newLogicalPlan = currentLogicalPlan.transformDown {
+        case p if p == logicalNode => newLogicalNode
       }
+      assert(newLogicalPlan != currentLogicalPlan,
+        s"logicalNode: $logicalNode; plan: $currentLogicalPlan stage: $s")
+      s.plan.setLogicalLink(newLogicalNode)
+      currentLogicalPlan = newLogicalPlan
     }
   }
 
