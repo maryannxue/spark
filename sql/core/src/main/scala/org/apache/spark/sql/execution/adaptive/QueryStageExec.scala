@@ -95,17 +95,17 @@ abstract class QueryStageExec extends LeafExecNode {
   override def doExecuteBroadcast[T](): Broadcast[T] = plan.executeBroadcast()
   override def doCanonicalize(): SparkPlan = plan.canonicalized
 
-  // TODO: maybe we should not hide query stage entirely from explain result.
   override def generateTreeString(
-    depth: Int,
-    lastChildren: Seq[Boolean],
-    append: String => Unit,
-    verbose: Boolean,
-    prefix: String = "",
-    addSuffix: Boolean = false,
-    maxFields: Int): Unit = {
+      depth: Int,
+      lastChildren: Seq[Boolean],
+      append: String => Unit,
+      verbose: Boolean,
+      prefix: String = "",
+      addSuffix: Boolean = false,
+      maxFields: Int): Unit = {
+    super.generateTreeString(depth, lastChildren, append, verbose, prefix, addSuffix, maxFields)
     plan.generateTreeString(
-      depth, lastChildren, append, verbose, "", false, maxFields)
+      depth + 1, lastChildren :+ true, append, verbose, "", false, maxFields)
   }
 
   override def logicalLink: Option[LogicalPlan] = plan.collectFirst {
@@ -160,17 +160,14 @@ case class BroadcastQueryStageExec(id: Int, plan: BroadcastExchangeExec) extends
   }
 
   override def stats: Option[Statistics] = {
-    val sizeOption = resultOption match {
+    resultOption match {
       case Some(_) =>
-        Some(plan.metrics("dataSize").value).map(BigInt.apply)
+        Some(Statistics(sizeInBytes = plan.metrics("dataSize").value))
       case _ if plan.child.isInstanceOf[QueryStageExec] =>
-        plan.child.asInstanceOf[QueryStageExec].stats.map(_.sizeInBytes)
+        plan.child.asInstanceOf[QueryStageExec].stats.map(
+          s => Statistics(sizeInBytes = s.sizeInBytes))
       case _ => None
     }
-    val limit = conf.autoBroadcastJoinThreshold
-    // This is a hack to prevent a broadcast join turning back into other joins again
-    val size = sizeOption.filter( _ <= limit).getOrElse(BigInt.apply(limit))
-    Some(Statistics(sizeInBytes = size))
   }
 }
 

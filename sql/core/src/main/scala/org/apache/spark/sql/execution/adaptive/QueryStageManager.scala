@@ -123,6 +123,7 @@ class QueryStageManager(
     // TODO we should only process the latest StageReady event to avoid waste of re-planning.
     case StageReady(stage) =>
       readyStages += stage.id
+      currentLogicalPlan.invalidateStatsCache()
       val newPlan = optimizeEntirePlan(currentLogicalPlan)
       if (newPlan != currentPlan) {
         logDebug(s"Logical Plan changed to: $currentLogicalPlan")

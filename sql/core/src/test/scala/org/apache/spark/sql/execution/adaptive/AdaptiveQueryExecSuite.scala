@@ -42,7 +42,7 @@ class AdaptiveQueryExecSuite extends QueryTest with SharedSQLContext {
       val smj = df.queryExecution.sparkPlan.collect {
         case s: SortMergeJoinExec => s
       }
-      assert(smj.nonEmpty)
+      assert(smj.size == 1)
       df.collect()
       df.show()
       val adaptivePlan = df.queryExecution.executedPlan.asInstanceOf[AdaptiveSparkPlanExec]
@@ -60,12 +60,12 @@ class AdaptiveQueryExecSuite extends QueryTest with SharedSQLContext {
       val smj = df.queryExecution.sparkPlan.collect {
         case s: SortMergeJoinExec => s
       }
-      assert(smj.nonEmpty)
+      assert(smj.size == 1)
       df.collect()
       df.show()
       val adaptivePlan = df.queryExecution.executedPlan.asInstanceOf[AdaptiveSparkPlanExec]
       val bhj = findBroadcastHashJoin(adaptivePlan.executedPlan)
-      assert(bhj.nonEmpty, adaptivePlan.executedPlan)
+      assert(bhj.size == 1, adaptivePlan.executedPlan)
     }
   }
 
@@ -86,12 +86,12 @@ class AdaptiveQueryExecSuite extends QueryTest with SharedSQLContext {
       val smj = df.queryExecution.sparkPlan.collect {
         case s: SortMergeJoinExec => s
       }
-      assert(smj.nonEmpty)
+      assert(smj.size == 3)
       df.collect()
       df.show()
       val adaptivePlan = df.queryExecution.executedPlan.asInstanceOf[AdaptiveSparkPlanExec]
       val bhj = findBroadcastHashJoin(adaptivePlan.executedPlan)
-      assert(bhj.nonEmpty, adaptivePlan.executedPlan)
+      assert(bhj.size == 1, adaptivePlan.executedPlan)
     }
   }
 
@@ -114,12 +114,40 @@ class AdaptiveQueryExecSuite extends QueryTest with SharedSQLContext {
       val smj = df.queryExecution.sparkPlan.collect {
         case s: SortMergeJoinExec => s
       }
-      assert(smj.nonEmpty)
+      assert(smj.size == 3)
       df.collect()
       df.show()
       val adaptivePlan = df.queryExecution.executedPlan.asInstanceOf[AdaptiveSparkPlanExec]
       val bhj = findBroadcastHashJoin(adaptivePlan.executedPlan)
-      assert(bhj.nonEmpty, adaptivePlan.executedPlan)
+      assert(bhj.size == 1, adaptivePlan.executedPlan)
+    }
+  }
+
+  test("multiple joins with aggregate 2") {
+    withSQLConf(
+      SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true",
+      SQLConf.AUTO_BROADCASTJOIN_THRESHOLD.key -> "500") {
+      val df = sql(
+        """
+          |WITH t4 AS (
+          |  SELECT * FROM lowercaseData t2 JOIN (
+          |    select a, max(b) b from testData2 group by a
+          |  ) t3 ON t2.n = t3.b
+          |)
+          |SELECT * FROM testData
+          |JOIN testData2 t2 ON key = t2.a
+          |JOIN t4 ON value = t4.a
+          |WHERE value = 1
+        """.stripMargin)
+      val smj = df.queryExecution.sparkPlan.collect {
+        case s: SortMergeJoinExec => s
+      }
+      assert(smj.size == 3)
+      df.collect()
+      df.show()
+      val adaptivePlan = df.queryExecution.executedPlan.asInstanceOf[AdaptiveSparkPlanExec]
+      val bhj = findBroadcastHashJoin(adaptivePlan.executedPlan)
+      assert(bhj.size == 3, adaptivePlan.executedPlan)
     }
   }
 }

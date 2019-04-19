@@ -670,8 +670,6 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
       case ExternalRDD(outputObjAttr, rdd) => ExternalRDDScanExec(outputObjAttr, rdd) :: Nil
       case r: LogicalRDD =>
         RDDScanExec(r.output, r.rdd, "ExistingRDD", r.outputPartitioning, r.outputOrdering) :: Nil
-      case q: LogicalQueryStage =>
-        q.physicalPlan :: Nil
       case _ => Nil
     }
   }
