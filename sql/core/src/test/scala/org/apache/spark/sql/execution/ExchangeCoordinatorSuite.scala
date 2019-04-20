@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.execution
 
+import org.junit.Ignore
 import org.scalatest.BeforeAndAfterAll
 
 import org.apache.spark.{MapOutputStatistics, SparkConf, SparkFunSuite}
@@ -26,6 +27,7 @@ import org.apache.spark.sql.execution.exchange.{ExchangeCoordinator, ReusedExcha
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.internal.SQLConf
 
+@Ignore
 class ExchangeCoordinatorSuite extends SparkFunSuite with BeforeAndAfterAll {
 
   private var originalActiveSparkSession: Option[SparkSession] = _
